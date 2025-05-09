@@ -127,17 +127,17 @@ SELECT * from comments;
 --     TABLOCK
 -- );
 
-
+-----Implemented below as the csv data has same (followerId and followee id)
 -- FOLLOWERS
-BULK INSERT followers
-FROM '/home/himanshupal\social_media\followers.csv'
-WITH (
-    FORMAT = 'CSV',
-    FIRSTROW = 2,
-    FIELDTERMINATOR = ',',
-    ROWTERMINATOR = '\n',
-    TABLOCK
-);
+-- BULK INSERT followers
+-- FROM '/home/himanshupal\social_media\followers.csv'
+-- WITH (
+--     FORMAT = 'CSV',
+--     FIRSTROW = 2,
+--     FIELDTERMINATOR = ',',
+--     ROWTERMINATOR = '\n',
+--     TABLOCK
+-- );
 
 
 -- MESSAGES
@@ -210,19 +210,56 @@ INSERT INTO likes (like_id, user_id, post_id, comment_id, created_at)
 SELECT
     like_id,
     user_id,
-    CASE
-        WHEN post_id = ' ' THEN 0  -- or any default integer value
-        ELSE TRY_CAST(post_id AS INT)
+    CASE 
+        WHEN post_id IS NULL OR post_id = '' THEN NULL
+        ELSE TRY_CAST(TRY_CAST(post_id AS FLOAT) AS INT)
     END,
-    CASE
-        WHEN comment_id = ' ' THEN 0  -- or any default integer value
-        ELSE TRY_CAST(comment_id AS INT)
+    CASE 
+        WHEN comment_id IS NULL OR comment_id = '' THEN NULL
+        ELSE TRY_CAST(TRY_CAST(comment_id AS FLOAT) AS INT)
     END,
     created_at
 FROM likes_staging;
 
 
 
+
 select * from likes
 
 TRUNCATE TABLE likes
+
+
+CREATE TABLE followers_staging (
+    follower_id INT,
+    followee_id INT,
+    followed_at DATETIME
+);
+
+
+BULK INSERT followers_staging
+FROM '/home/himanshupal/social_media/followers.csv'
+WITH (
+    FORMAT = 'CSV',
+    FIRSTROW = 2,
+    FIELDTERMINATOR = ',',
+    ROWTERMINATOR = '\n',
+    TABLOCK
+);
+
+select * from followers_staging
+
+INSERT INTO followers (follower_id, followee_id, followed_at)
+SELECT s.follower_id, s.followee_id, s.followed_at
+FROM (
+    SELECT *, ROW_NUMBER() OVER (PARTITION BY follower_id, followee_id ORDER BY followed_at DESC) AS rn
+    FROM followers_staging
+) AS s
+WHERE s.rn = 1
+AND NOT EXISTS (
+    SELECT 1
+    FROM followers f
+    WHERE f.follower_id = s.follower_id
+      AND f.followee_id = s.followee_id
+);
+
+select * from followers
